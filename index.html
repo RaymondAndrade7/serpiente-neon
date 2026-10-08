@@ -39,11 +39,18 @@
     text-shadow: 0 0 6px var(--accent), 0 0 18px var(--accent);
   }
   .hud {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 20px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 18px;
     font-size: 15px; color: var(--muted);
   }
   .hud b { color: var(--text); font-size: 18px; }
   .hud #lives { color: var(--life); text-shadow: 0 0 8px var(--life); letter-spacing: 2px; }
+  .hud-btns { display: flex; gap: 6px; }
+  .icon-btn {
+    font: inherit; font-size: 16px; line-height: 1;
+    width: 34px; height: 34px; padding: 0; border: none; border-radius: 8px; cursor: pointer;
+    background: #1d1840; color: var(--text); box-shadow: 0 0 0 1px #3a3080;
+  }
+  #pauseBtn { display: none; }
   .board {
     position: relative;
     width: min(92vw, 68vh, 520px);
@@ -55,13 +62,15 @@
   canvas#game { display: block; width: 100%; height: 100%; background: var(--panel); }
   .overlay {
     position: absolute; inset: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; justify-content: safe center;
     gap: 10px; text-align: center; padding: 14px;
-    background: rgba(7, 6, 15, .82);
+    background: rgba(7, 6, 15, .84);
     backdrop-filter: blur(3px);
     overflow-y: auto;
+    touch-action: pan-y; /* la tabla de récords se puede desplazar con el dedo */
   }
-  .overlay.hidden { display: none; }
+  .overlay.hidden, .hidden { display: none !important; }
   .overlay h2 {
     margin: 0; font-size: clamp(22px, 6vw, 34px);
     color: var(--food); text-shadow: 0 0 8px var(--food), 0 0 22px var(--food);
@@ -84,30 +93,64 @@
   }
   .skin canvas { width: 84px; height: 22px; display: block; }
   .skin.selected { box-shadow: 0 0 0 2px var(--accent), 0 0 14px rgba(0, 229, 255, .6); background: #221b48; }
-  .skins.hidden, .skins-label.hidden, .legend.hidden { display: none; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .play {
     font: inherit; font-size: 16px; letter-spacing: 2px;
     color: var(--bg); background: var(--snake);
     border: none; border-radius: 8px; padding: 10px 26px; cursor: pointer;
     box-shadow: 0 0 12px var(--snake);
   }
+  .ghost {
+    font: inherit; font-size: 14px; letter-spacing: 2px;
+    color: var(--gold); background: transparent;
+    border: none; border-radius: 8px; padding: 10px 16px; cursor: pointer;
+    box-shadow: 0 0 0 1px var(--gold);
+  }
   button:active { transform: scale(.96); }
-  .pad {
-    display: none;
-    grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 48px);
-    gap: 6px;
+
+  /* Formulario para el nombre */
+  .name-form { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; max-width: 300px; }
+  .name-form label { color: var(--gold); font-size: 14px; text-shadow: 0 0 8px rgba(255, 210, 63, .6); }
+  .name-form .row { display: flex; gap: 6px; width: 100%; }
+  .name-form input {
+    flex: 1; min-width: 0;
+    font: inherit; font-size: 16px; /* 16px evita el zoom automático de iOS */
+    color: var(--text); background: #1a1535;
+    border: none; border-radius: 8px; padding: 10px 12px;
+    box-shadow: 0 0 0 1px #3a3080;
+    user-select: text; -webkit-user-select: text;
   }
-  .pad button {
-    font: inherit; border: none; border-radius: 8px;
-    background: #1d1840; color: var(--accent); box-shadow: 0 0 0 1px #3a3080;
-    padding: 0; font-size: 20px;
+  .name-form input:focus { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+  .name-form .play { padding: 10px 14px; font-size: 14px; }
+  .link {
+    font: inherit; font-size: 12px; color: var(--muted); background: none; border: none;
+    text-decoration: underline; cursor: pointer; padding: 4px;
   }
-  .pad .up { grid-column: 2; }
-  .pad .left { grid-column: 1; grid-row: 2; }
-  .pad .down { grid-column: 2; grid-row: 2; }
-  .pad .right { grid-column: 3; grid-row: 2; }
+
+  /* Tabla de récords */
+  .records { border-collapse: collapse; width: 100%; max-width: 320px; font-size: 14px; }
+  .records td { padding: 5px 8px; border-bottom: 1px solid #241d4d; }
+  .records td:first-child { color: var(--muted); width: 2.5em; text-align: right; }
+  .records td:nth-child(2) { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; width: 100%; }
+  .records td:last-child { text-align: right; color: var(--snake); font-weight: bold; }
+  .records tr.top1 td:first-child { color: var(--gold); }
+  .records tr.mine td { background: rgba(0, 229, 255, .12); color: var(--accent); }
+  .records .empty td { color: var(--muted); text-align: center; border: none; font-weight: normal; }
+  /* En la tabla, los botones van arriba para no tener que desplazarse */
+  .overlay.panel-records h2 { order: -3; }
+  .overlay.panel-records #msg { order: -2; }
+  .overlay.panel-records .actions { order: -1; }
+
   .touch-hint { display: none; }
-  @media (pointer: coarse) { .pad { display: grid; } .keys-hint { display: none; } .touch-hint { display: block; } }
+  @media (pointer: coarse) {
+    main { gap: 10px; padding: 12px 8px; }
+    /* Sin cruceta, el tablero aprovecha todo el ancho del teléfono */
+    .board { width: min(calc(100vw - 16px), calc(100vh - 150px), 640px); }
+    #pauseBtn { display: block; }
+    .records td { padding: 4px 8px; font-size: 13px; }
+    .keys-hint { display: none; }
+    .touch-hint { display: block; }
+  }
 </style>
 </head>
 <body>
@@ -118,12 +161,25 @@
     <span>Récord <b id="best">0</b></span>
     <span>Nivel <b id="level">1</b></span>
     <span>Vidas <b id="lives">♥</b></span>
+    <span class="hud-btns">
+      <button type="button" class="icon-btn" id="soundBtn" aria-label="Silenciar">🔊</button>
+      <button type="button" class="icon-btn" id="pauseBtn" aria-label="Pausar">⏸</button>
+    </span>
   </div>
   <div class="board">
     <canvas id="game"></canvas>
     <div class="overlay" id="overlay">
       <h2 id="title">¿Listo?</h2>
       <p id="msg"></p>
+      <form class="name-form hidden" id="nameForm" autocomplete="off">
+        <label for="nameInput">¡Entraste al top 10! Escribe tu nombre</label>
+        <div class="row">
+          <input id="nameInput" maxlength="12" placeholder="Tu nombre" enterkeyhint="done" spellcheck="false">
+          <button type="submit" class="play">GUARDAR</button>
+        </div>
+        <button type="button" class="link" id="skipBtn">No guardar</button>
+      </form>
+      <table class="records hidden" id="records"><tbody></tbody></table>
       <div class="legend" id="legend">
         <span class="f">● +1</span>
         <span class="g">★ Mega: crece +3</span>
@@ -131,26 +187,26 @@
       </div>
       <div class="skins-label" id="skinsLabel">ELIGE TU SKIN</div>
       <div class="skins" id="skins"></div>
-      <button type="button" class="play" id="start">JUGAR</button>
-      <p class="keys-hint">Flechas/WASD para moverte · Espacio pausa · 1–6 cambia skin</p>
+      <div class="actions" id="actions">
+        <button type="button" class="play" id="start">JUGAR</button>
+        <button type="button" class="ghost" id="recordsBtn">🏆 RÉCORDS</button>
+      </div>
+      <p class="keys-hint">Flechas/WASD para moverte · Espacio pausa · M sonido · 1–6 cambia skin</p>
       <p class="touch-hint">Desliza el dedo en cualquier parte de la pantalla para moverte</p>
     </div>
-  </div>
-  <div class="pad" id="pad">
-    <button type="button" class="up" data-dir="up" aria-label="Arriba">▲</button>
-    <button type="button" class="left" data-dir="left" aria-label="Izquierda">◀</button>
-    <button type="button" class="down" data-dir="down" aria-label="Abajo">▼</button>
-    <button type="button" class="right" data-dir="right" aria-label="Derecha">▶</button>
   </div>
 </main>
 
 <script>
 (() => {
   const GRID = 20;
-  const BASE_TICK = 140;   // ms por paso al inicio
-  const MIN_TICK = 55;
+  const START_TICK = 220;    // ms por paso al empezar (lento)
+  const MIN_TICK = 60;       // velocidad máxima
+  const SPEEDUP_MS = 45000;  // cuanto menor, más rápido acelera con el tiempo
+  const LEVEL_MS = 20000;    // cada 20 s de juego sube un nivel
   const MAX_LIVES = 3;
-  const SPECIAL_TTL = 55;  // pasos que dura una fruta especial
+  const SPECIAL_TTL = 55;    // pasos que dura una fruta especial
+  const TOP_N = 10;
   const DIRS = {
     up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
     left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
@@ -174,14 +230,125 @@
   const scoreEl = $('score'), bestEl = $('best'), levelEl = $('level'), livesEl = $('lives');
   const overlay = $('overlay'), titleEl = $('title'), msgEl = $('msg'), startBtn = $('start');
   const skinsEl = $('skins'), skinsLabel = $('skinsLabel'), legendEl = $('legend');
+  const nameForm = $('nameForm'), nameInput = $('nameInput'), recordsEl = $('records');
+  const recordsBtn = $('recordsBtn'), soundBtn = $('soundBtn'), pauseBtn = $('pauseBtn');
 
-  let snake, dir, queue, food, special, grow, lives, score, best, skin;
+  let snake, dir, queue, food, special, grow, lives, score, best, skin, level, playTime;
   let state, tickMs, acc, last, particles, popups, cell;
+  let panel = 'menu';       // qué muestra el overlay: menu | over | records | pause
+  let pendingScore = null;  // puntaje esperando nombre para la tabla
+  let highlight = -1;       // fila recién guardada en la tabla
+  let newBest = false;      // la última partida superó el récord
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, String(v)); } catch {} },
   };
+
+  // ---------- Sonidos (sintetizados con Web Audio, sin archivos) ----------
+  const sound = (() => {
+    let ac = null, master = null;
+    let muted = store.get('serpiente-neon-mute') === '1';
+
+    // Los navegadores solo dejan sonar audio después de un toque o tecla
+    function unlock() {
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        ac = new AC();
+        master = ac.createGain();
+        master.gain.value = .7;
+        master.connect(ac.destination);
+      }
+      if (ac.state === 'suspended') ac.resume();
+    }
+
+    function tone(freq, at, dur, { type = 'square', vol = .08, slide = 0 } = {}) {
+      const t0 = ac.currentTime + at;
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * slide), t0 + dur);
+      g.gain.setValueAtTime(.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + .01);
+      g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+      o.connect(g).connect(master);
+      o.start(t0);
+      o.stop(t0 + dur + .02);
+    }
+
+    const arp = (notes, gap, dur, opts) => notes.forEach((f, i) => tone(f, i * gap, dur, opts));
+
+    const SFX = {
+      start:  () => { tone(440, 0, .08); tone(880, .08, .14); },
+      eat:    () => tone(620, 0, .09, { slide: 1.7 }),
+      mega:   () => arp([523, 659, 784, 1047], .06, .13, { type: 'triangle', vol: .11 }),
+      life:   () => { tone(784, 0, .14, { type: 'sine', vol: .14 }); tone(1175, .11, .3, { type: 'sine', vol: .14 }); },
+      level:  () => arp([440, 554, 659, 880], .05, .1, { vol: .06 }),
+      hurt:   () => tone(320, 0, .4, { type: 'sawtooth', slide: .3, vol: .1 }),
+      over:   () => arp([392, 330, 262, 196], .15, .24, { type: 'triangle', vol: .13 }),
+      record: () => arp([523, 659, 784, 1047, 1319], .08, .18, { type: 'triangle', vol: .12 }),
+    };
+
+    return {
+      unlock,
+      play(name) { if (!muted && ac) SFX[name](); },
+      get muted() { return muted; },
+      toggle() { muted = !muted; store.set('serpiente-neon-mute', muted ? 1 : 0); return muted; },
+    };
+  })();
+
+  function renderSoundBtn() {
+    soundBtn.textContent = sound.muted ? '🔇' : '🔊';
+    soundBtn.setAttribute('aria-label', sound.muted ? 'Activar sonido' : 'Silenciar');
+  }
+
+  // ---------- Tabla de récords (guardada en este dispositivo) ----------
+  function loadRecords() {
+    try {
+      const list = JSON.parse(store.get('serpiente-neon-records') || '[]');
+      return Array.isArray(list)
+        ? list.filter(r => r && typeof r.name === 'string' && Number.isFinite(r.score)).slice(0, TOP_N)
+        : [];
+    } catch { return []; }
+  }
+
+  function qualifies(points) {
+    const list = loadRecords();
+    return points > 0 && (list.length < TOP_N || points > list[list.length - 1].score);
+  }
+
+  function addRecord(name, points) {
+    const list = loadRecords();
+    // Con empate, el récord más antiguo queda arriba
+    let pos = list.findIndex(r => points > r.score);
+    if (pos === -1) pos = list.length;
+    list.splice(pos, 0, { name, score: points, date: Date.now() });
+    store.set('serpiente-neon-records', JSON.stringify(list.slice(0, TOP_N)));
+    return pos < TOP_N ? pos : -1;
+  }
+
+  function renderRecords() {
+    const list = loadRecords();
+    const body = recordsEl.tBodies[0];
+    body.replaceChildren();
+    if (!list.length) {
+      const tr = body.insertRow();
+      tr.className = 'empty';
+      const td = tr.insertCell();
+      td.colSpan = 3;
+      td.textContent = 'Todavía no hay récords. ¡Sé el primero!';
+      return;
+    }
+    list.forEach((r, i) => {
+      const tr = body.insertRow();
+      if (i === 0) tr.classList.add('top1');
+      if (i === highlight) tr.classList.add('mine');
+      tr.insertCell().textContent = i === 0 ? '👑' : `${i + 1}.`;
+      tr.insertCell().textContent = r.name;
+      tr.insertCell().textContent = r.score;
+    });
+  }
 
   // ---------- Selector de skins ----------
   const previews = SKINS.map((s, idx) => {
@@ -242,12 +409,27 @@
     score = 0;
     grow = 0;
     lives = 1;
+    level = 1;
+    playTime = 0;
     special = null;
-    tickMs = BASE_TICK;
+    tickMs = START_TICK;
     particles = [];
     popups = [];
     placeFood();
     updateHud();
+  }
+
+  // La serpiente arranca lenta y acelera con el tiempo de juego, acercándose a MIN_TICK
+  function updateSpeed() {
+    tickMs = MIN_TICK + (START_TICK - MIN_TICK) * Math.exp(-playTime / SPEEDUP_MS);
+    const newLevel = 1 + Math.floor(playTime / LEVEL_MS);
+    if (newLevel > level) {
+      level = newLevel;
+      updateHud();
+      const size = canvas.clientWidth;
+      popups.push({ x: size / 2, y: size * .3, text: `¡NIVEL ${level}!`, color: '#00e5ff', life: 1.4, big: true });
+      sound.play('level');
+    }
   }
 
   function freeCells() {
@@ -280,7 +462,7 @@
   function updateHud() {
     scoreEl.textContent = score;
     bestEl.textContent = best;
-    levelEl.textContent = 1 + Math.floor(score / 5);
+    levelEl.textContent = level;
     livesEl.textContent = '♥'.repeat(lives);
   }
 
@@ -297,8 +479,14 @@
     return !body.some(s => s.x === h.x && s.y === h.y);
   }
 
+  // Desde el menú o el fin del juego, una flecha o swipe empieza la partida
+  // (salvo mientras se escribe el nombre para la tabla)
+  function canQuickStart() {
+    return (state === 'ready' || state === 'over') && pendingScore === null;
+  }
+
   function turn(name) {
-    if (state === 'ready' || state === 'over') start();
+    if (canQuickStart()) start();
     const next = DIRS[name];
     if (state === 'hurt') {
       // Tras perder una vida, la serpiente espera a que elijas una dirección segura
@@ -334,25 +522,25 @@
     if (eaten === 'food') {
       score += 1; grow += 1;
       effect(head, ITEM_COLORS.food, '+1');
+      sound.play('eat');
       placeFood();
     } else if (eaten === 'mega') {
       score += 3; grow += 3;
       special = null;
       effect(head, ITEM_COLORS.mega, '+3 ★');
+      sound.play('mega');
     } else if (eaten === 'life') {
       score += 1; grow += 1;
       lives = Math.min(MAX_LIVES, lives + 1);
       special = null;
       effect(head, ITEM_COLORS.life, '+1 ♥');
+      sound.play('life');
     }
 
     if (grow > 0) grow--;
     else snake.pop();
 
-    if (eaten) {
-      tickMs = Math.max(MIN_TICK, BASE_TICK - score * 3);
-      updateHud();
-    }
+    if (eaten) updateHud();
     if (!food && !placeFood() && snake.length >= GRID * GRID) return gameOver(true);
 
     if (special && --special.ttl <= 0) special = null;
@@ -367,6 +555,7 @@
       state = 'hurt';
       queue = [];
       popups.push({ x: (head.x + .5) * cell, y: (head.y + .5) * cell, text: '-1 ♥', color: ITEM_COLORS.life, life: 1 });
+      sound.play('hurt');
       updateHud();
     } else {
       gameOver();
@@ -387,17 +576,21 @@
   }
 
   function start() {
+    nameInput.blur();
     reset();
+    pendingScore = null;
+    highlight = -1;
     state = 'playing';
     overlay.classList.add('hidden');
     acc = 0;
     last = performance.now();
+    sound.play('start');
   }
 
   function togglePause() {
     if (state === 'playing') {
       state = 'paused';
-      showOverlay('Pausa', 'Espacio o el botón para seguir', 'SEGUIR', false);
+      showPanel('pause');
     } else if (state === 'paused') {
       state = 'playing';
       overlay.classList.add('hidden');
@@ -407,24 +600,63 @@
 
   function gameOver(won = false) {
     state = 'over';
-    const record = score > best;
-    if (record) { best = score; store.set('serpiente-neon-best', best); }
+    newBest = score > best;
+    if (newBest) { best = score; store.set('serpiente-neon-best', best); }
     updateHud();
-    showOverlay(
-      won ? '¡Llenaste el tablero!' : 'Fin del juego',
-      `Puntos: ${score}${record && score > 0 ? ' · ¡Nuevo récord! 🎉' : ''}`,
-      'OTRA VEZ',
-      true
-    );
+    pendingScore = qualifies(score) ? score : null;
+    sound.play(pendingScore !== null ? 'record' : 'over');
+    showPanel('over', won);
   }
 
-  function showOverlay(title, msg, btn, withSkins) {
-    titleEl.textContent = title;
-    msgEl.textContent = msg;
-    msgEl.style.display = msg ? '' : 'none';
-    startBtn.textContent = btn;
-    for (const el of [skinsEl, skinsLabel, legendEl]) el.classList.toggle('hidden', !withSkins);
+  function saveName(e) {
+    e.preventDefault();
+    if (pendingScore === null) return;
+    const name = nameInput.value.trim().replace(/\s+/g, ' ').slice(0, 12) || 'Anónimo';
+    store.set('serpiente-neon-name', name);
+    highlight = addRecord(name, pendingScore);
+    pendingScore = null;
+    nameInput.blur();
+    showPanel('records');
+  }
+
+  // ---------- Overlay ----------
+  function showPanel(name, won = false) {
+    panel = name;
+    overlay.className = `overlay panel-${name}`;
+    const isMenu = name === 'menu';
+    const isOver = name === 'over';
+    const asking = isOver && pendingScore !== null;
+
+    if (name === 'menu') { titleEl.textContent = '¿Listo?'; msgEl.textContent = ''; }
+    if (name === 'pause') { titleEl.textContent = 'Pausa'; msgEl.textContent = 'Toca SEGUIR o pulsa Espacio'; }
+    if (name === 'records') { titleEl.textContent = '🏆 Récords'; msgEl.textContent = 'En este dispositivo'; }
+    if (isOver) {
+      titleEl.textContent = won ? '¡Llenaste el tablero!' : 'Fin del juego';
+      msgEl.textContent = `Puntos: ${score}${newBest ? ' · ¡Nuevo récord! 🎉' : ''}`;
+    }
+    msgEl.style.display = msgEl.textContent ? '' : 'none';
+
+    nameForm.classList.toggle('hidden', !asking);
+    recordsEl.classList.toggle('hidden', name !== 'records');
+    for (const el of [skinsEl, skinsLabel]) el.classList.toggle('hidden', !(isMenu || (isOver && !asking)));
+    legendEl.classList.toggle('hidden', !isMenu);
+    $('actions').classList.toggle('hidden', asking);
+    recordsBtn.classList.toggle('hidden', name === 'pause');
+
+    startBtn.textContent = name === 'pause' ? 'SEGUIR' : state === 'over' ? 'OTRA VEZ' : 'JUGAR';
+    recordsBtn.textContent = name === 'records' ? 'VOLVER' : '🏆 RÉCORDS';
+
+    if (name === 'records') renderRecords();
     overlay.classList.remove('hidden');
+    overlay.scrollTop = 0;
+    // Si tu récord quedó abajo en la tabla, se desplaza hasta verlo
+    recordsEl.querySelector('tr.mine')?.scrollIntoView({ block: 'nearest' });
+
+    if (asking) {
+      nameInput.value = store.get('serpiente-neon-name') || '';
+      // En el teléfono no se abre el teclado solo: se toca el campo
+      if (!matchMedia('(pointer: coarse)').matches) nameInput.focus();
+    }
   }
 
   // ---------- Dibujo ----------
@@ -533,12 +765,12 @@
       ctx.fill();
     }
 
-    // Textos flotantes (+1, +3 ★, +1 ♥...)
+    // Textos flotantes (+1, +3 ★, +1 ♥, ¡NIVEL 2!...)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `bold ${Math.max(12, cell * .7)}px ui-monospace, Menlo, monospace`;
     for (const p of popups) {
-      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+      ctx.font = `bold ${Math.max(12, cell * (p.big ? 1.2 : .7))}px ui-monospace, Menlo, monospace`;
       glow(p.color, 12);
       ctx.fillText(p.text, p.x, p.y);
     }
@@ -560,8 +792,11 @@
 
   function loop(now) {
     if (state === 'playing') {
-      acc += now - last;
+      const dt = Math.min(now - last, 250); // evita saltos al volver de otra pestaña
+      acc += dt;
+      playTime += dt;
       last = now;
+      updateSpeed();
       while (acc >= tickMs && state === 'playing') {
         acc -= tickMs;
         step();
@@ -583,14 +818,16 @@
     ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
   };
   window.addEventListener('keydown', e => {
+    if (e.target === nameInput) return; // escribiendo el nombre: las teclas son letras
     if (KEYMAP[e.code]) { e.preventDefault(); turn(KEYMAP[e.code]); return; }
-    const menu = state === 'ready' || state === 'over';
-    if (menu && /^Digit[1-6]$/.test(e.code)) { selectSkin(Number(e.code.slice(5)) - 1); return; }
+    if (e.code === 'KeyM') { soundBtn.click(); return; }
+    const skinsVisible = !skinsEl.classList.contains('hidden') && !overlay.classList.contains('hidden');
+    if (skinsVisible && /^Digit[1-6]$/.test(e.code)) { selectSkin(Number(e.code.slice(5)) - 1); return; }
     if (e.code === 'Space' || e.code === 'KeyP') {
       e.preventDefault();
-      if (menu) start(); else togglePause();
+      if (canQuickStart()) start(); else togglePause();
     }
-    if (e.code === 'Enter' && menu) { e.preventDefault(); start(); }
+    if (e.code === 'Enter' && canQuickStart()) { e.preventDefault(); start(); }
   });
 
   // Deslizar en pantallas táctiles: funciona en toda la pantalla y gira en cuanto
@@ -599,15 +836,16 @@
   const SWIPE_MIN = 22;
   let swipe = null;
   document.addEventListener('touchstart', e => {
-    // Los botones (skins, JUGAR, cruceta) se tocan, no se deslizan
-    if (e.touches.length !== 1 || e.target.closest('button')) { swipe = null; return; }
+    // Los botones y el campo de nombre se tocan, no se deslizan
+    if (e.touches.length !== 1 || e.target.closest('button, input')) { swipe = null; return; }
     const t = e.touches[0];
     swipe = { x: t.clientX, y: t.clientY };
   }, { passive: true });
   document.addEventListener('touchmove', e => {
     if (!swipe) return;
-    const menu = state === 'ready' || state === 'over';
-    if (!menu && e.cancelable) e.preventDefault(); // sin scroll ni "pull to refresh" mientras juegas
+    const playing = state === 'playing' || state === 'hurt';
+    if (playing && e.cancelable) e.preventDefault(); // sin scroll ni "pull to refresh" mientras juegas
+    if (!playing && !canQuickStart()) return;       // en pausa o escribiendo el nombre, no se mueve nada
     const t = e.touches[0];
     const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_MIN) return;
@@ -617,28 +855,42 @@
   document.addEventListener('touchend', () => { swipe = null; });
   document.addEventListener('touchcancel', () => { swipe = null; });
 
+  // El audio se habilita con el primer toque, clic o tecla
+  for (const ev of ['touchend', 'pointerdown', 'keydown']) {
+    window.addEventListener(ev, sound.unlock, { passive: true });
+  }
+
   // Si cambias de app o bloqueas el teléfono, el juego se pausa solo
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && state === 'playing') togglePause();
   });
 
-  // Cruceta en pantalla
-  $('pad').addEventListener('pointerdown', e => {
-    const d = e.target.closest('button')?.dataset.dir;
-    if (d) { e.preventDefault(); turn(d); }
-  });
-
   startBtn.addEventListener('click', () => {
     if (state === 'paused') togglePause(); else start();
   });
+  recordsBtn.addEventListener('click', () => {
+    if (panel === 'records') showPanel(state === 'over' ? 'over' : 'menu');
+    else showPanel('records');
+  });
+  nameForm.addEventListener('submit', saveName);
+  $('skipBtn').addEventListener('click', () => { pendingScore = null; showPanel('over'); });
+  soundBtn.addEventListener('click', () => {
+    sound.unlock();
+    sound.toggle();
+    renderSoundBtn();
+    soundBtn.blur();
+  });
+  pauseBtn.addEventListener('click', () => { togglePause(); pauseBtn.blur(); });
 
   // ---------- Arranque ----------
-  best = Number(store.get('serpiente-neon-best')) || 0;
+  const topScore = loadRecords()[0]?.score || 0;
+  best = Math.max(Number(store.get('serpiente-neon-best')) || 0, topScore);
   const savedSkin = Number(store.get('serpiente-neon-skin'));
   selectSkin(Number.isInteger(savedSkin) && savedSkin >= 0 && savedSkin < SKINS.length ? savedSkin : 0);
+  renderSoundBtn();
   state = 'ready';
   reset();
-  showOverlay('¿Listo?', '', 'JUGAR', true);
+  showPanel('menu');
   window.addEventListener('resize', resize);
   resize();
   requestAnimationFrame(t => { last = t; loop(t); });
