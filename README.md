@@ -4,7 +4,9 @@ El clásico juego de la serpiente con estilo neón, en un solo archivo HTML. No 
 
 ## Cómo jugar
 
-Abre `index.html` en tu navegador y pulsa **JUGAR**.
+**Juega en línea:** https://raymondandrade7.github.io/serpiente-neon/ (también funciona en el móvil).
+
+O abre `index.html` en tu navegador y pulsa **JUGAR**.
 
 Come para crecer y sumar puntos. Cada 5 puntos subes de nivel y la serpiente va más rápido. Si chocas contra una pared o contra ti mismo pierdes una vida; con la última vida, termina la partida.
 
@@ -34,3 +36,8 @@ La ★ y el ♥ aparecen de vez en cuando y desaparecen si tardas en comerlos (p
 ## Skins
 
 Neón, Arcoíris, Lava, Hielo, Galaxia y Tigre. El récord y la skin elegida se guardan en tu navegador.
+
+## Revisión automática y publicación
+
+- **Revisión** (`.github/workflows/ci.yml`): en cada PR y en cada push a `main` se valida el HTML con [html-validate](https://html-validate.org) y se revisa la sintaxis del JavaScript con `node --check`. Si algo falla, el PR lo muestra con ❌.
+- **Publicación** (`.github/workflows/pages.yml`): cada merge a `main` publica el juego en GitHub Pages.
