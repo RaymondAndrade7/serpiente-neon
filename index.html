@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Serpiente Neón</title>
+<style>
+  :root {
+    --bg: #07060f;
+    --panel: #120f24;
+    --text: #e9e6ff;
+    --muted: #8a84b8;
+    --snake: #39ff14;
+    --food: #ff2bd6;
+    --gold: #ffd23f;
+    --life: #ff3b5c;
+    --accent: #00e5ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: radial-gradient(ellipse at top, #1a1040 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none; -webkit-user-select: none;
+  }
+  main {
+    height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 16px;
+  }
+  h1 {
+    margin: 0; font-size: clamp(22px, 5vw, 34px); letter-spacing: 4px;
+    color: var(--accent);
+    text-shadow: 0 0 6px var(--accent), 0 0 18px var(--accent);
+  }
+  .hud {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 20px;
+    font-size: 15px; color: var(--muted);
+  }
+  .hud b { color: var(--text); font-size: 18px; }
+  .hud #lives { color: var(--life); text-shadow: 0 0 8px var(--life); letter-spacing: 2px; }
+  .board {
+    position: relative;
+    width: min(92vw, 68vh, 520px);
+    aspect-ratio: 1;
+    border-radius: 12px;
+    box-shadow: 0 0 0 2px #2a2160, 0 0 30px rgba(0, 229, 255, .25);
+    overflow: hidden;
+  }
+  canvas#game { display: block; width: 100%; height: 100%; background: var(--panel); }
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; text-align: center; padding: 14px;
+    background: rgba(7, 6, 15, .82);
+    backdrop-filter: blur(3px);
+    overflow-y: auto;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h2 {
+    margin: 0; font-size: clamp(22px, 6vw, 34px);
+    color: var(--food); text-shadow: 0 0 8px var(--food), 0 0 22px var(--food);
+  }
+  .overlay p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 13px; }
+  .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-size: 13px; }
+  .legend .f { color: var(--food); }
+  .legend .g { color: var(--gold); }
+  .legend .l { color: var(--life); }
+  .skins-label { font-size: 12px; letter-spacing: 3px; color: var(--accent); margin-top: 4px; }
+  .skins {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    width: 100%; max-width: 330px;
+  }
+  .skin {
+    background: #1a1535; color: var(--text); box-shadow: 0 0 0 1px #3a3080;
+    border-radius: 8px; padding: 6px 4px 4px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font: inherit; font-size: 11px; letter-spacing: 1px; border: none;
+  }
+  .skin canvas { width: 84px; height: 22px; display: block; }
+  .skin.selected { box-shadow: 0 0 0 2px var(--accent), 0 0 14px rgba(0, 229, 255, .6); background: #221b48; }
+  .skins.hidden, .skins-label.hidden, .legend.hidden { display: none; }
+  .play {
+    font: inherit; font-size: 16px; letter-spacing: 2px;
+    color: var(--bg); background: var(--snake);
+    border: none; border-radius: 8px; padding: 10px 26px; cursor: pointer;
+    box-shadow: 0 0 12px var(--snake);
+  }
+  button:active { transform: scale(.96); }
+  .pad {
+    display: none;
+    grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 48px);
+    gap: 6px;
+  }
+  .pad button {
+    font: inherit; border: none; border-radius: 8px;
+    background: #1d1840; color: var(--accent); box-shadow: 0 0 0 1px #3a3080;
+    padding: 0; font-size: 20px;
+  }
+  .pad .up { grid-column: 2; }
+  .pad .left { grid-column: 1; grid-row: 2; }
+  .pad .down { grid-column: 2; grid-row: 2; }
+  .pad .right { grid-column: 3; grid-row: 2; }
+  @media (pointer: coarse) { .pad { display: grid; } .keys-hint { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>SERPIENTE NEÓN</h1>
+  <div class="hud">
+    <span>Puntos <b id="score">0</b></span>
+    <span>Récord <b id="best">0</b></span>
+    <span>Nivel <b id="level">1</b></span>
+    <span>Vidas <b id="lives">♥</b></span>
+  </div>
+  <div class="board">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay">
+      <h2 id="title">¿Listo?</h2>
+      <p id="msg"></p>
+      <div class="legend" id="legend">
+        <span class="f">● +1</span>
+        <span class="g">★ Mega: crece +3</span>
+        <span class="l">♥ Vida extra</span>
+      </div>
+      <div class="skins-label" id="skinsLabel">ELIGE TU SKIN</div>
+      <div class="skins" id="skins"></div>
+      <button class="play" id="start">JUGAR</button>
+      <p class="keys-hint">Flechas/WASD para moverte · Espacio pausa · 1–6 cambia skin</p>
+    </div>
+  </div>
+  <div class="pad" id="pad">
+    <button class="up" data-dir="up">▲</button>
+    <button class="left" data-dir="left">◀</button>
+    <button class="down" data-dir="down">▼</button>
+    <button class="right" data-dir="right">▶</button>
+  </div>
+</main>
+
+<script>
+(() => {
+  const GRID = 20;
+  const BASE_TICK = 140;   // ms por paso al inicio
+  const MIN_TICK = 55;
+  const MAX_LIVES = 3;
+  const SPECIAL_TTL = 55;  // pasos que dura una fruta especial
+  const DIRS = {
+    up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+  };
+
+  // Cada skin decide el color de un segmento: i = índice, k = 0..1 de cabeza a cola, t = tiempo
+  const SKINS = [
+    { name: 'Neón',     color: (i, k) => `hsl(${105 + k * 80}, 100%, ${i === 0 ? 62 : 54}%)` },
+    { name: 'Arcoíris', color: (i, k, t) => `hsl(${(i * 22 + t / 6) % 360}, 100%, 60%)` },
+    { name: 'Lava',     color: (i, k) => `hsl(${48 - k * 48}, 100%, ${i === 0 ? 62 : 55 - k * 10}%)` },
+    { name: 'Hielo',    color: (i, k) => `hsl(${185 + k * 40}, 100%, ${i === 0 ? 88 : 76 - k * 16}%)` },
+    { name: 'Galaxia',  color: (i, k, t) => `hsl(${265 + k * 60 + Math.sin(t / 300 + i * .6) * 14}, 100%, ${i === 0 ? 74 : 63}%)` },
+    { name: 'Tigre',    color: i => i === 0 ? '#ffb347' : (Math.floor((i - 1) / 2) % 2 ? '#3d2400' : '#ff8c1a') },
+  ];
+
+  const ITEM_COLORS = { food: '#ff2bd6', mega: '#ffd23f', life: '#ff3b5c' };
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const scoreEl = $('score'), bestEl = $('best'), levelEl = $('level'), livesEl = $('lives');
+  const overlay = $('overlay'), titleEl = $('title'), msgEl = $('msg'), startBtn = $('start');
+  const skinsEl = $('skins'), skinsLabel = $('skinsLabel'), legendEl = $('legend');
+
+  let snake, dir, queue, food, special, grow, lives, score, best, skin;
+  let state, tickMs, acc, last, particles, popups, cell;
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, String(v)); } catch {} },
+  };
+
+  // ---------- Selector de skins ----------
+  const previews = SKINS.map((s, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'skin';
+    btn.type = 'button';
+    const c = document.createElement('canvas');
+    const label = document.createElement('span');
+    label.textContent = `${idx + 1}. ${s.name}`;
+    btn.append(c, label);
+    btn.addEventListener('click', () => selectSkin(idx));
+    skinsEl.append(btn);
+    return { btn, c, cx: c.getContext('2d') };
+  });
+
+  function selectSkin(idx) {
+    skin = idx;
+    store.set('serpiente-neon-skin', idx);
+    previews.forEach((p, i) => p.btn.classList.toggle('selected', i === idx));
+  }
+
+  function drawPreviews(t) {
+    const dpr = window.devicePixelRatio || 1;
+    previews.forEach((p, idx) => {
+      const w = 84, h = 22;
+      if (p.c.width !== w * dpr) { p.c.width = w * dpr; p.c.height = h * dpr; }
+      const c = p.cx;
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, w, h);
+      const n = 7, size = 11;
+      for (let i = n - 1; i >= 0; i--) {
+        const k = i / (n - 1);
+        const color = SKINS[idx].color(i, k, t);
+        c.shadowColor = color; c.shadowBlur = 6; c.fillStyle = color;
+        const x = w - 10 - i * size;
+        const y = h / 2 + Math.sin(t / 220 - i * .8) * 3;
+        c.beginPath();
+        c.arc(x, y, i === 0 ? 5 : 4.4 - k * 1.2, 0, Math.PI * 2);
+        c.fill();
+      }
+    });
+  }
+
+  // ---------- Estado del juego ----------
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const size = canvas.clientWidth;
+    canvas.width = canvas.height = Math.round(size * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cell = size / GRID;
+  }
+
+  function reset() {
+    const mid = Math.floor(GRID / 2);
+    snake = [{ x: mid, y: mid }, { x: mid - 1, y: mid }, { x: mid - 2, y: mid }];
+    dir = DIRS.right;
+    queue = [];
+    score = 0;
+    grow = 0;
+    lives = 1;
+    special = null;
+    tickMs = BASE_TICK;
+    particles = [];
+    popups = [];
+    placeFood();
+    updateHud();
+  }
+
+  function freeCells() {
+    const taken = new Set(snake.map(s => s.x + ',' + s.y));
+    if (food) taken.add(food.x + ',' + food.y);
+    if (special) taken.add(special.x + ',' + special.y);
+    const free = [];
+    for (let x = 0; x < GRID; x++)
+      for (let y = 0; y < GRID; y++)
+        if (!taken.has(x + ',' + y)) free.push({ x, y });
+    return free;
+  }
+
+  function placeFood() {
+    food = null;
+    const free = freeCells();
+    if (!free.length) return false;
+    food = free[Math.floor(Math.random() * free.length)];
+    return true;
+  }
+
+  function maybeSpawnSpecial() {
+    if (special || Math.random() > 1 / 55) return;
+    const free = freeCells();
+    if (!free.length) return;
+    const type = lives < MAX_LIVES && Math.random() < .3 ? 'life' : 'mega';
+    special = { ...free[Math.floor(Math.random() * free.length)], type, ttl: SPECIAL_TTL };
+  }
+
+  function updateHud() {
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+    levelEl.textContent = 1 + Math.floor(score / 5);
+    livesEl.textContent = '♥'.repeat(lives);
+  }
+
+  function nextHead(d) {
+    return { x: snake[0].x + d.x, y: snake[0].y + d.y };
+  }
+
+  // ¿Se puede avanzar en esta dirección sin chocar?
+  function isSafe(d) {
+    const h = nextHead(d);
+    if (h.x < 0 || h.y < 0 || h.x >= GRID || h.y >= GRID) return false;
+    const eats = (food && h.x === food.x && h.y === food.y) || (special && h.x === special.x && h.y === special.y);
+    const body = grow > 0 || eats ? snake : snake.slice(0, -1);
+    return !body.some(s => s.x === h.x && s.y === h.y);
+  }
+
+  function turn(name) {
+    if (state === 'ready' || state === 'over') start();
+    const next = DIRS[name];
+    if (state === 'hurt') {
+      // Tras perder una vida, la serpiente espera a que elijas una dirección segura
+      if (isSafe(next)) {
+        dir = next;
+        queue = [];
+        state = 'playing';
+        acc = 0;
+        last = performance.now();
+      }
+      return;
+    }
+    if (state !== 'playing') return;
+    const ref = queue.length ? queue[queue.length - 1] : dir;
+    // Evita girar 180° (o repetir la misma dirección)
+    if (next.x === -ref.x && next.y === -ref.y) return;
+    if (next === ref) return;
+    if (queue.length < 3) queue.push(next);
+  }
+
+  function step() {
+    if (queue.length) dir = queue.shift();
+
+    if (!isSafe(dir)) return crash();
+
+    const head = nextHead(dir);
+    snake.unshift(head);
+
+    let eaten = null;
+    if (food && head.x === food.x && head.y === food.y) eaten = 'food';
+    else if (special && head.x === special.x && head.y === special.y) eaten = special.type;
+
+    if (eaten === 'food') {
+      score += 1; grow += 1;
+      effect(head, ITEM_COLORS.food, '+1');
+      placeFood();
+    } else if (eaten === 'mega') {
+      score += 3; grow += 3;
+      special = null;
+      effect(head, ITEM_COLORS.mega, '+3 ★');
+    } else if (eaten === 'life') {
+      score += 1; grow += 1;
+      lives = Math.min(MAX_LIVES, lives + 1);
+      special = null;
+      effect(head, ITEM_COLORS.life, '+1 ♥');
+    }
+
+    if (grow > 0) grow--;
+    else snake.pop();
+
+    if (eaten) {
+      tickMs = Math.max(MIN_TICK, BASE_TICK - score * 3);
+      updateHud();
+    }
+    if (!food && !placeFood() && snake.length >= GRID * GRID) return gameOver(true);
+
+    if (special && --special.ttl <= 0) special = null;
+    maybeSpawnSpecial();
+  }
+
+  function crash() {
+    const head = snake[0];
+    burst(head.x, head.y, '#ffffff', 30);
+    if (lives > 1 && Object.values(DIRS).some(isSafe)) {
+      lives--;
+      state = 'hurt';
+      queue = [];
+      popups.push({ x: (head.x + .5) * cell, y: (head.y + .5) * cell, text: '-1 ♥', color: ITEM_COLORS.life, life: 1 });
+      updateHud();
+    } else {
+      gameOver();
+    }
+  }
+
+  function effect(cellPos, color, text) {
+    burst(cellPos.x, cellPos.y, color, 22);
+    popups.push({ x: (cellPos.x + .5) * cell, y: (cellPos.y + .5) * cell, text, color, life: 1 });
+  }
+
+  function burst(gx, gy, color, count) {
+    const cx = (gx + .5) * cell, cy = (gy + .5) * cell;
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 3.5;
+      particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color });
+    }
+  }
+
+  function start() {
+    reset();
+    state = 'playing';
+    overlay.classList.add('hidden');
+    acc = 0;
+    last = performance.now();
+  }
+
+  function togglePause() {
+    if (state === 'playing') {
+      state = 'paused';
+      showOverlay('Pausa', 'Espacio o el botón para seguir', 'SEGUIR', false);
+    } else if (state === 'paused') {
+      state = 'playing';
+      overlay.classList.add('hidden');
+      last = performance.now();
+    }
+  }
+
+  function gameOver(won = false) {
+    state = 'over';
+    const record = score > best;
+    if (record) { best = score; store.set('serpiente-neon-best', best); }
+    updateHud();
+    showOverlay(
+      won ? '¡Llenaste el tablero!' : 'Fin del juego',
+      `Puntos: ${score}${record && score > 0 ? ' · ¡Nuevo récord! 🎉' : ''}`,
+      'OTRA VEZ',
+      true
+    );
+  }
+
+  function showOverlay(title, msg, btn, withSkins) {
+    titleEl.textContent = title;
+    msgEl.textContent = msg;
+    msgEl.style.display = msg ? '' : 'none';
+    startBtn.textContent = btn;
+    for (const el of [skinsEl, skinsLabel, legendEl]) el.classList.toggle('hidden', !withSkins);
+    overlay.classList.remove('hidden');
+  }
+
+  // ---------- Dibujo ----------
+  function glow(color, blur) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = blur;
+    ctx.fillStyle = color;
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.fill();
+  }
+
+  function star(cx, cy, r, rot) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rad = i % 2 ? r * .45 : r;
+      const a = rot + i * Math.PI / 5 - Math.PI / 2;
+      ctx.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function heart(cx, cy, s) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + s * .6);
+    ctx.bezierCurveTo(cx - s * 1.15, cy - s * .05, cx - s * .55, cy - s * .95, cx, cy - s * .38);
+    ctx.bezierCurveTo(cx + s * .55, cy - s * .95, cx + s * 1.15, cy - s * .05, cx, cy + s * .6);
+    ctx.fill();
+  }
+
+  function draw(t) {
+    const size = canvas.clientWidth;
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#120f24';
+    ctx.fillRect(0, 0, size, size);
+
+    // Cuadrícula tenue
+    ctx.strokeStyle = 'rgba(120, 100, 255, .07)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 1; i < GRID; i++) {
+      const p = Math.round(i * cell) + .5;
+      ctx.moveTo(p, 0); ctx.lineTo(p, size);
+      ctx.moveTo(0, p); ctx.lineTo(size, p);
+    }
+    ctx.stroke();
+
+    // Comida normal pulsante
+    if (food) {
+      const pulse = .32 + Math.sin(t / 160) * .06;
+      glow(ITEM_COLORS.food, 18);
+      ctx.beginPath();
+      ctx.arc((food.x + .5) * cell, (food.y + .5) * cell, cell * pulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Fruta especial (parpadea cuando está por desaparecer)
+    if (special && !(special.ttl < 15 && Math.floor(t / 110) % 2)) {
+      const cx = (special.x + .5) * cell, cy = (special.y + .5) * cell;
+      const pulse = 1 + Math.sin(t / 130) * .1;
+      glow(ITEM_COLORS[special.type], 24);
+      if (special.type === 'mega') star(cx, cy, cell * .5 * pulse, t / 600);
+      else heart(cx, cy, cell * .48 * pulse);
+    }
+
+    // Serpiente (parpadea si acaba de perder una vida)
+    if (state === 'hurt') ctx.globalAlpha = Math.sin(t / 70) > 0 ? 1 : .3;
+    const n = snake.length;
+    for (let i = n - 1; i >= 0; i--) {
+      const s = snake[i];
+      const k = i / Math.max(1, n - 1);
+      const color = SKINS[skin].color(i, k, t);
+      glow(color, i === 0 ? 20 : 12);
+      const pad = cell * (i === 0 ? .06 : .1 + k * .06);
+      roundRect(s.x * cell + pad, s.y * cell + pad, cell - pad * 2, cell - pad * 2, cell * .28);
+    }
+
+    // Ojos
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#07060f';
+    const h = snake[0], er = cell * .09;
+    const ex = dir.y !== 0 ? .22 : 0, ey = dir.x !== 0 ? .22 : 0;
+    const fx = dir.x * .18, fy = dir.y * .18;
+    for (const sgn of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc((h.x + .5 + fx + ex * sgn) * cell, (h.y + .5 + fy + ey * sgn) * cell, er, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Partículas
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      glow(p.color, 10);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.2 * p.life + .5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Textos flotantes (+1, +3 ★, +1 ♥...)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.max(12, cell * .7)}px ui-monospace, Menlo, monospace`;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      glow(p.color, 12);
+      ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+
+    if (state === 'hurt') {
+      ctx.fillStyle = 'rgba(7, 6, 15, .55)';
+      ctx.fillRect(0, size / 2 - cell * 1.6, size, cell * 3.2);
+      glow(ITEM_COLORS.life, 14);
+      ctx.font = `bold ${Math.max(14, cell * .85)}px ui-monospace, Menlo, monospace`;
+      ctx.fillText('¡Perdiste una vida!', size / 2, size / 2 - cell * .55);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#e9e6ff';
+      ctx.font = `${Math.max(11, cell * .55)}px ui-monospace, Menlo, monospace`;
+      ctx.fillText('Elige una dirección para seguir', size / 2, size / 2 + cell * .6);
+    }
+  }
+
+  function loop(now) {
+    if (state === 'playing') {
+      acc += now - last;
+      last = now;
+      while (acc >= tickMs && state === 'playing') {
+        acc -= tickMs;
+        step();
+      }
+    }
+    particles = particles.filter(p => {
+      p.x += p.vx; p.y += p.vy; p.vx *= .93; p.vy *= .93; p.life -= .03;
+      return p.life > 0;
+    });
+    popups = popups.filter(p => { p.y -= .6; p.life -= .018; return p.life > 0; });
+    draw(now);
+    if (!overlay.classList.contains('hidden')) drawPreviews(now);
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- Controles ----------
+  const KEYMAP = {
+    ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
+    ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+  };
+  window.addEventListener('keydown', e => {
+    if (KEYMAP[e.code]) { e.preventDefault(); turn(KEYMAP[e.code]); return; }
+    const menu = state === 'ready' || state === 'over';
+    if (menu && /^Digit[1-6]$/.test(e.code)) { selectSkin(Number(e.code.slice(5)) - 1); return; }
+    if (e.code === 'Space' || e.code === 'KeyP') {
+      e.preventDefault();
+      if (menu) start(); else togglePause();
+    }
+    if (e.code === 'Enter' && menu) { e.preventDefault(); start(); }
+  });
+
+  // Deslizar en pantallas táctiles
+  let touchStart = null;
+  canvas.addEventListener('touchstart', e => {
+    const t = e.touches[0]; touchStart = { x: t.clientX, y: t.clientY };
+  }, { passive: true });
+  canvas.addEventListener('touchend', e => {
+    if (!touchStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.x, dy = t.clientY - touchStart.y;
+    touchStart = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+    turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+  });
+
+  // Cruceta en pantalla
+  $('pad').addEventListener('pointerdown', e => {
+    const d = e.target.closest('button')?.dataset.dir;
+    if (d) { e.preventDefault(); turn(d); }
+  });
+
+  startBtn.addEventListener('click', () => {
+    if (state === 'paused') togglePause(); else start();
+  });
+
+  // ---------- Arranque ----------
+  best = Number(store.get('serpiente-neon-best')) || 0;
+  const savedSkin = Number(store.get('serpiente-neon-skin'));
+  selectSkin(Number.isInteger(savedSkin) && savedSkin >= 0 && savedSkin < SKINS.length ? savedSkin : 0);
+  state = 'ready';
+  reset();
+  showOverlay('¿Listo?', '', 'JUGAR', true);
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(t => { last = t; loop(t); });
+})();
+</script>
+</body>
+</html>
