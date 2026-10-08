@@ -24,6 +24,8 @@
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     overflow: hidden;
     touch-action: none;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
     user-select: none; -webkit-user-select: none;
   }
   main {
@@ -104,7 +106,8 @@
   .pad .left { grid-column: 1; grid-row: 2; }
   .pad .down { grid-column: 2; grid-row: 2; }
   .pad .right { grid-column: 3; grid-row: 2; }
-  @media (pointer: coarse) { .pad { display: grid; } .keys-hint { display: none; } }
+  .touch-hint { display: none; }
+  @media (pointer: coarse) { .pad { display: grid; } .keys-hint { display: none; } .touch-hint { display: block; } }
 </style>
 </head>
 <body>
@@ -130,6 +133,7 @@
       <div class="skins" id="skins"></div>
       <button class="play" id="start">JUGAR</button>
       <p class="keys-hint">Flechas/WASD para moverte · Espacio pausa · 1–6 cambia skin</p>
+      <p class="touch-hint">Desliza el dedo en cualquier parte de la pantalla para moverte</p>
     </div>
   </div>
   <div class="pad" id="pad">
@@ -589,18 +593,33 @@
     if (e.code === 'Enter' && menu) { e.preventDefault(); start(); }
   });
 
-  // Deslizar en pantallas táctiles
-  let touchStart = null;
-  canvas.addEventListener('touchstart', e => {
-    const t = e.touches[0]; touchStart = { x: t.clientX, y: t.clientY };
+  // Deslizar en pantallas táctiles: funciona en toda la pantalla y gira en cuanto
+  // el dedo recorre SWIPE_MIN px, sin esperar a soltarlo. Se puede encadenar
+  // varios giros en un mismo gesto (p. ej. arriba y luego derecha sin levantar el dedo).
+  const SWIPE_MIN = 22;
+  let swipe = null;
+  document.addEventListener('touchstart', e => {
+    // Los botones (skins, JUGAR, cruceta) se tocan, no se deslizan
+    if (e.touches.length !== 1 || e.target.closest('button')) { swipe = null; return; }
+    const t = e.touches[0];
+    swipe = { x: t.clientX, y: t.clientY };
   }, { passive: true });
-  canvas.addEventListener('touchend', e => {
-    if (!touchStart) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - touchStart.x, dy = t.clientY - touchStart.y;
-    touchStart = null;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+  document.addEventListener('touchmove', e => {
+    if (!swipe) return;
+    const menu = state === 'ready' || state === 'over';
+    if (!menu && e.cancelable) e.preventDefault(); // sin scroll ni "pull to refresh" mientras juegas
+    const t = e.touches[0];
+    const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_MIN) return;
     turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+    swipe = { x: t.clientX, y: t.clientY };
+  }, { passive: false });
+  document.addEventListener('touchend', () => { swipe = null; });
+  document.addEventListener('touchcancel', () => { swipe = null; });
+
+  // Si cambias de app o bloqueas el teléfono, el juego se pausa solo
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state === 'playing') togglePause();
   });
 
   // Cruceta en pantalla
