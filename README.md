@@ -16,7 +16,7 @@ Come para crecer y sumar puntos. La serpiente empieza lenta y acelera poco a poc
 | --- | --- | --- |
 | Moverse | Flechas o WASD | Deslizar en cualquier parte de la pantalla |
 | Pausar / seguir | Espacio o P | Botón ⏸ (también se pausa sola al cambiar de app o bloquear el teléfono) |
-| Sonido on/off | M | Botón 🔊 |
+| Volumen de música y efectos | — (M silencia todo) | Botón 🔊 |
 | Empezar partida | Espacio o Enter | Botón JUGAR |
 | Cambiar skin | 1–6 (en el menú) | Tocar una skin |
 
@@ -36,11 +36,20 @@ La ★ y el ♥ aparecen de vez en cuando y desaparecen si tardas en comerlos (p
 
 ## Tabla de récords
 
-Si tu puntaje entra en el top 10, el juego te pide tu nombre al terminar la partida. La tabla se abre con **🏆 RÉCORDS** y se guarda en el navegador de cada dispositivo: cada persona ve los récords jugados en su propio teléfono o computadora.
+Si tu puntaje entra en el top 10, el juego te pide tu nombre al terminar la partida. La tabla se abre con **🏆 RÉCORDS** y tiene dos pestañas:
 
-## Sonidos
+- **🌍 Todos:** el top 10 de todos los jugadores, guardado en [Supabase](https://supabase.com). El líder aparece en el menú como "👑 Líder mundial".
+- **📱 Este equipo:** los récords jugados en tu propio dispositivo (se guardan en el navegador y funcionan sin internet).
 
-Los efectos (comer, estrella, vida, subir de nivel, perder) se generan en el navegador con Web Audio, sin archivos de audio. En el iPhone, si el interruptor de silencio está activado, no se escuchan.
+La tabla online se configura con `ONLINE.url` y `ONLINE.key` al inicio del `<script>` en `index.html`, y la tabla de la base de datos se crea con [`supabase/scores.sql`](supabase/scores.sql). Si están vacíos, el juego usa solo la tabla local.
+
+## Música y sonidos
+
+Música arcade de fondo y efectos (comer, estrella, vida, subir de nivel, perder), todo generado en el navegador con Web Audio, sin archivos de audio. La música acelera un poco con cada nivel. El volumen de cada uno se ajusta con el botón 🔊. En el iPhone, si el interruptor de silencio está activado, no se escuchan.
+
+## Fuego
+
+Desde el nivel 2 la serpiente echa fuego del color de su skin, y se vuelve más intenso en cada nivel: primero llamitas en la cabeza, luego en el cuerpo, un aura alrededor de la cabeza y chispas (de colores desde el nivel 7). Al subir de nivel explota una lluvia de chispas.
 
 ## Skins
 

@@ -141,6 +141,34 @@
   .overlay.panel-records #msg { order: -2; }
   .overlay.panel-records .actions { order: -1; }
 
+  /* Líder mundial y pestañas de la tabla */
+  .leader { color: var(--gold) !important; font-size: 14px !important; text-shadow: 0 0 8px rgba(255, 210, 63, .5); }
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    font: inherit; font-size: 12px; letter-spacing: 1px; cursor: pointer;
+    color: var(--muted); background: #1a1535; border: none; border-radius: 8px; padding: 7px 10px;
+    box-shadow: 0 0 0 1px #3a3080;
+  }
+  .tab.active { color: var(--bg); background: var(--accent); box-shadow: 0 0 10px rgba(0, 229, 255, .6); }
+  .overlay.panel-records .tabs { order: -1; }
+  #recStatus:empty { display: none; }
+
+  /* Panel de volumen */
+  .vol-panel {
+    position: fixed; z-index: 10; top: 72px; left: 50%; transform: translateX(-50%);
+    width: min(300px, calc(100vw - 32px));
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 16px; border-radius: 12px;
+    background: #15112c; box-shadow: 0 0 0 1px #3a3080, 0 10px 40px rgba(0, 0, 0, .6);
+    touch-action: manipulation;
+  }
+  .vol-panel h3 { margin: 0; font-size: 14px; letter-spacing: 3px; color: var(--accent); text-align: center; }
+  .vol-row { display: grid; grid-template-columns: 6.5em 1fr 2.5em; align-items: center; gap: 8px; font-size: 13px; }
+  .vol-row output { text-align: right; color: var(--muted); }
+  .vol-row input { width: 100%; accent-color: var(--accent); }
+  .vol-panel .actions .play { padding: 8px 18px; font-size: 14px; }
+  .vol-panel .actions .ghost { padding: 8px 12px; font-size: 12px; }
+
   .touch-hint { display: none; }
   @media (pointer: coarse) {
     main { gap: 10px; padding: 12px 8px; }
@@ -162,15 +190,25 @@
     <span>Nivel <b id="level">1</b></span>
     <span>Vidas <b id="lives">♥</b></span>
     <span class="hud-btns">
-      <button type="button" class="icon-btn" id="soundBtn" aria-label="Silenciar">🔊</button>
+      <button type="button" class="icon-btn" id="soundBtn" aria-label="Volumen">🔊</button>
       <button type="button" class="icon-btn" id="pauseBtn" aria-label="Pausar">⏸</button>
     </span>
+  </div>
+  <div class="vol-panel hidden" id="volPanel" role="dialog" aria-label="Volumen">
+    <h3>VOLUMEN</h3>
+    <div class="vol-row"><label for="musicVol">🎵 Música</label><input type="range" id="musicVol" min="0" max="100" step="5"><output id="musicOut" for="musicVol"></output></div>
+    <div class="vol-row"><label for="sfxVol">💥 Efectos</label><input type="range" id="sfxVol" min="0" max="100" step="5"><output id="sfxOut" for="sfxVol"></output></div>
+    <div class="actions">
+      <button type="button" class="ghost" id="muteBtn">SILENCIAR TODO</button>
+      <button type="button" class="play" id="volClose">LISTO</button>
+    </div>
   </div>
   <div class="board">
     <canvas id="game"></canvas>
     <div class="overlay" id="overlay">
       <h2 id="title">¿Listo?</h2>
       <p id="msg"></p>
+      <p class="leader hidden" id="leader"></p>
       <form class="name-form hidden" id="nameForm" autocomplete="off">
         <label for="nameInput">¡Entraste al top 10! Escribe tu nombre</label>
         <div class="row">
@@ -179,6 +217,11 @@
         </div>
         <button type="button" class="link" id="skipBtn">No guardar</button>
       </form>
+      <div class="tabs hidden" id="recTabs">
+        <button type="button" class="tab" data-tab="online">🌍 TODOS</button>
+        <button type="button" class="tab" data-tab="local">📱 ESTE EQUIPO</button>
+      </div>
+      <p id="recStatus"></p>
       <table class="records hidden" id="records"><tbody></tbody></table>
       <div class="legend" id="legend">
         <span class="f">● +1</span>
@@ -191,7 +234,7 @@
         <button type="button" class="play" id="start">JUGAR</button>
         <button type="button" class="ghost" id="recordsBtn">🏆 RÉCORDS</button>
       </div>
-      <p class="keys-hint">Flechas/WASD para moverte · Espacio pausa · M sonido · 1–6 cambia skin</p>
+      <p class="keys-hint">Flechas/WASD para moverte · Espacio pausa · M silencio · 1–6 cambia skin</p>
       <p class="touch-hint">Desliza el dedo en cualquier parte de la pantalla para moverte</p>
     </div>
   </div>
@@ -207,6 +250,14 @@
   const MAX_LIVES = 3;
   const SPECIAL_TTL = 55;    // pasos que dura una fruta especial
   const TOP_N = 10;
+  const MAX_FLAMES = 900;    // tope de partículas de fuego, para no trabar teléfonos lentos
+
+  // Tabla de récords online (Supabase). Ambos valores son públicos por diseño:
+  // la tabla solo permite leer y agregar puntajes (ver supabase/scores.sql).
+  const ONLINE = {
+    url: '',
+    key: '',
+  };
   const DIRS = {
     up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
     left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
@@ -219,7 +270,8 @@
     { name: 'Lava',     color: (i, k) => `hsl(${48 - k * 48}, 100%, ${i === 0 ? 62 : 55 - k * 10}%)` },
     { name: 'Hielo',    color: (i, k) => `hsl(${185 + k * 40}, 100%, ${i === 0 ? 88 : 76 - k * 16}%)` },
     { name: 'Galaxia',  color: (i, k, t) => `hsl(${265 + k * 60 + Math.sin(t / 300 + i * .6) * 14}, 100%, ${i === 0 ? 74 : 63}%)` },
-    { name: 'Tigre',    color: i => i === 0 ? '#ffb347' : (Math.floor((i - 1) / 2) % 2 ? '#3d2400' : '#ff8c1a') },
+    { name: 'Tigre',    color: i => i === 0 ? '#ffb347' : (Math.floor((i - 1) / 2) % 2 ? '#3d2400' : '#ff8c1a'),
+      flame: i => i % 3 ? '#ff8c1a' : '#ffb347' }, // sus rayas oscuras no darían fuego visible
   ];
 
   const ITEM_COLORS = { food: '#ff2bd6', mega: '#ffd23f', life: '#ff3b5c' };
@@ -232,23 +284,41 @@
   const skinsEl = $('skins'), skinsLabel = $('skinsLabel'), legendEl = $('legend');
   const nameForm = $('nameForm'), nameInput = $('nameInput'), recordsEl = $('records');
   const recordsBtn = $('recordsBtn'), soundBtn = $('soundBtn'), pauseBtn = $('pauseBtn');
+  const leaderEl = $('leader'), recTabs = $('recTabs'), recStatusEl = $('recStatus'), volPanel = $('volPanel');
 
   let snake, dir, queue, food, special, grow, lives, score, best, skin, level, playTime;
   let state, tickMs, acc, last, particles, popups, cell;
+  let flames = [], flameAcc = 0;
   let panel = 'menu';       // qué muestra el overlay: menu | over | records | pause
   let pendingScore = null;  // puntaje esperando nombre para la tabla
   let highlight = -1;       // fila recién guardada en la tabla
   let newBest = false;      // la última partida superó el récord
+  let pendingLocal = false, pendingOnline = false; // en qué tablas entra el puntaje pendiente
+  let recTab = 'online';    // pestaña de la tabla: online | local
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, String(v)); } catch {} },
   };
 
-  // ---------- Sonidos (sintetizados con Web Audio, sin archivos) ----------
+  // ---------- Sonido y música (sintetizados con Web Audio, sin archivos) ----------
   const sound = (() => {
-    let ac = null, master = null;
+    let ac = null, master = null, sfxBus = null, musicBus = null, noise = null;
     let muted = store.get('serpiente-neon-mute') === '1';
+    let musicVol = Number(store.get('serpiente-neon-music') ?? 50);
+    let sfxVol = Number(store.get('serpiente-neon-sfx') ?? 80);
+    if (!Number.isFinite(musicVol)) musicVol = 50;
+    if (!Number.isFinite(sfxVol)) sfxVol = 80;
+
+    const midi = m => 440 * 2 ** ((m - 69) / 12);
+
+    function applyVolumes() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      master.gain.setTargetAtTime(muted ? 0 : 1, t, .02);
+      musicBus.gain.setTargetAtTime((musicVol / 100) * .45, t, .02);
+      sfxBus.gain.setTargetAtTime(sfxVol / 100, t, .02);
+    }
 
     // Los navegadores solo dejan sonar audio después de un toque o tecla
     function unlock() {
@@ -257,14 +327,21 @@
         if (!AC) return;
         ac = new AC();
         master = ac.createGain();
-        master.gain.value = .7;
+        sfxBus = ac.createGain();
+        musicBus = ac.createGain();
+        sfxBus.connect(master);
+        musicBus.connect(master);
         master.connect(ac.destination);
+        noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const d = noise.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        applyVolumes();
+        music.start();
       }
-      if (ac.state === 'suspended') ac.resume();
+      if (ac.state === 'suspended' && !document.hidden) ac.resume();
     }
 
-    function tone(freq, at, dur, { type = 'square', vol = .08, slide = 0 } = {}) {
-      const t0 = ac.currentTime + at;
+    function tone(freq, t0, dur, { type = 'square', vol = .08, slide = 0, out = sfxBus } = {}) {
       const o = ac.createOscillator(), g = ac.createGain();
       o.type = type;
       o.frequency.setValueAtTime(freq, t0);
@@ -272,38 +349,118 @@
       g.gain.setValueAtTime(.0001, t0);
       g.gain.exponentialRampToValueAtTime(vol, t0 + .01);
       g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
-      o.connect(g).connect(master);
+      o.connect(g).connect(out);
       o.start(t0);
       o.stop(t0 + dur + .02);
     }
 
-    const arp = (notes, gap, dur, opts) => notes.forEach((f, i) => tone(f, i * gap, dur, opts));
+    function hit(t0, dur, vol, filterType, freq) {
+      const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+      src.buffer = noise;
+      f.type = filterType;
+      f.frequency.value = freq;
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+      src.connect(f).connect(g).connect(musicBus);
+      src.start(t0, Math.random() * .5);
+      src.stop(t0 + dur + .02);
+    }
+
+    // Música: bucle chiptune de 4 compases (La menor: Am – F – C – G) a 16 pasos por compás
+    const music = (() => {
+      const ROOTS = [45, 41, 48, 43];                         // bajo de cada compás
+      const CHORDS = [[57, 60, 64], [53, 57, 60], [60, 64, 67], [55, 59, 62]];
+      const BASS = [0, 0, 12, 0, 0, 12, 7, 12];               // corcheas
+      const _ = null;
+      const LEAD = [
+        76, _, _, 74, 72, _, 69, _, 72, _, 74, _, 76, _, _, _,
+        77, _, _, 76, 74, _, 72, _, 69, _, 72, _, 74, _, _, _,
+        76, _, _, 74, 72, _, 76, _, 79, _, _, _, 76, _, 74, _,
+        74, _, _, 72, 71, _, 67, _, 71, _, 74, _, 71, _, _, _,
+      ];
+      let step = 0, loop = 0, nextTime = 0, timer = null;
+      let bpm = 132;
+
+      function playStep(i, t) {
+        const bar = i >> 4, s = i & 15, len = 60 / bpm / 4;
+        // Batería
+        if (s === 0 || s === 8 || (loop % 2 && s === 10)) {
+          tone(150, t, .14, { type: 'sine', vol: .55, slide: .25, out: musicBus });
+        }
+        if (s === 4 || s === 12) hit(t, .12, .22, 'bandpass', 1800);
+        if (s % 2 === 0) hit(t, .03, s % 4 ? .05 : .03, 'highpass', 7000);
+        // Bajo
+        if (s % 2 === 0) tone(midi(ROOTS[bar] + BASS[s >> 1]), t, len * 1.8, { type: 'triangle', vol: .3, out: musicBus });
+        // Arpegio
+        const ch = CHORDS[bar];
+        tone(midi([ch[0], ch[1], ch[2], ch[0] + 12][s % 4] + 12), t, len * .8, { vol: .025, out: musicBus });
+        // Melodía (descansa un bucle de cada tres, para no cansar)
+        const note = LEAD[i];
+        if (note && loop % 3 !== 2) {
+          let n = 1;
+          while (n < 4 && LEAD[i + n] === null && i + n < 64) n++;
+          tone(midi(note + (loop % 3 === 1 ? 12 : 0)), t, len * n * .9, { vol: .06, out: musicBus });
+        }
+      }
+
+      function schedule() {
+        if (!ac || ac.state !== 'running') return;
+        if (nextTime < ac.currentTime) nextTime = ac.currentTime + .05;
+        while (nextTime < ac.currentTime + .15) {
+          playStep(step, nextTime);
+          nextTime += 60 / bpm / 4;
+          step = (step + 1) % 64;
+          if (step === 0) loop++;
+        }
+      }
+
+      return {
+        start() { if (!timer) timer = setInterval(schedule, 25); },
+        // La música acelera un poco con cada nivel
+        setLevel(lv) { bpm = 132 + Math.min(lv - 1, 8) * 5; },
+      };
+    })();
+
+    const now = () => ac.currentTime;
+    const arp = (notes, gap, dur, opts) => notes.forEach((f, i) => tone(f, now() + i * gap, dur, opts));
 
     const SFX = {
-      start:  () => { tone(440, 0, .08); tone(880, .08, .14); },
-      eat:    () => tone(620, 0, .09, { slide: 1.7 }),
+      start:  () => { tone(440, now(), .08); tone(880, now() + .08, .14); },
+      eat:    () => tone(620, now(), .09, { slide: 1.7 }),
       mega:   () => arp([523, 659, 784, 1047], .06, .13, { type: 'triangle', vol: .11 }),
-      life:   () => { tone(784, 0, .14, { type: 'sine', vol: .14 }); tone(1175, .11, .3, { type: 'sine', vol: .14 }); },
-      level:  () => arp([440, 554, 659, 880], .05, .1, { vol: .06 }),
-      hurt:   () => tone(320, 0, .4, { type: 'sawtooth', slide: .3, vol: .1 }),
+      life:   () => { tone(784, now(), .14, { type: 'sine', vol: .14 }); tone(1175, now() + .11, .3, { type: 'sine', vol: .14 }); },
+      level:  () => arp([440, 554, 659, 880, 1109], .05, .12, { vol: .07 }),
+      hurt:   () => tone(320, now(), .4, { type: 'sawtooth', slide: .3, vol: .1 }),
       over:   () => arp([392, 330, 262, 196], .15, .24, { type: 'triangle', vol: .13 }),
       record: () => arp([523, 659, 784, 1047, 1319], .08, .18, { type: 'triangle', vol: .12 }),
     };
 
     return {
       unlock,
-      play(name) { if (!muted && ac) SFX[name](); },
+      play(name) { if (!muted && ac && ac.state === 'running') SFX[name](); },
+      setLevel: lv => music.setLevel(lv),
+      suspend() { if (ac && ac.state === 'running') ac.suspend(); },
       get muted() { return muted; },
-      toggle() { muted = !muted; store.set('serpiente-neon-mute', muted ? 1 : 0); return muted; },
+      get musicVol() { return musicVol; },
+      get sfxVol() { return sfxVol; },
+      setMusicVol(v) { musicVol = v; store.set('serpiente-neon-music', v); applyVolumes(); },
+      setSfxVol(v) { sfxVol = v; store.set('serpiente-neon-sfx', v); applyVolumes(); },
+      toggle() { muted = !muted; store.set('serpiente-neon-mute', muted ? 1 : 0); applyVolumes(); return muted; },
     };
   })();
 
-  function renderSoundBtn() {
+  function renderSoundUI() {
     soundBtn.textContent = sound.muted ? '🔇' : '🔊';
-    soundBtn.setAttribute('aria-label', sound.muted ? 'Activar sonido' : 'Silenciar');
+    $('muteBtn').textContent = sound.muted ? 'ACTIVAR SONIDO' : 'SILENCIAR TODO';
+    $('musicVol').value = sound.musicVol;
+    $('sfxVol').value = sound.sfxVol;
+    $('musicOut').textContent = sound.musicVol + '%';
+    $('sfxOut').textContent = sound.sfxVol + '%';
   }
 
-  // ---------- Tabla de récords (guardada en este dispositivo) ----------
+  // ---------- Tabla de récords ----------
+  // Local: guardada en el navegador de cada dispositivo.
+  // Online: compartida entre todos, guardada en Supabase (ver ONLINE arriba).
   function loadRecords() {
     try {
       const list = JSON.parse(store.get('serpiente-neon-records') || '[]');
@@ -313,10 +470,10 @@
     } catch { return []; }
   }
 
-  function qualifies(points) {
-    const list = loadRecords();
-    return points > 0 && (list.length < TOP_N || points > list[list.length - 1].score);
-  }
+  const beats = (list, points) => points > 0 && (list.length < TOP_N || points > list[list.length - 1].score);
+  const qualifiesLocal = points => beats(loadRecords(), points);
+  // Si la tabla online no se pudo cargar, se intenta enviar igual
+  const qualifiesOnline = points => online.enabled && points > 0 && (!online.list || beats(online.list, points));
 
   function addRecord(name, points) {
     const list = loadRecords();
@@ -328,11 +485,87 @@
     return pos < TOP_N ? pos : -1;
   }
 
+  const online = {
+    enabled: Boolean(ONLINE.url && ONLINE.key),
+    list: null,      // top 10 de todos (null = aún no cargado)
+    loading: false,
+    error: false,
+    mineId: null,    // id del récord recién enviado, para resaltarlo
+  };
+
+  async function api(path, options = {}) {
+    const res = await fetch(`${ONLINE.url.replace(/\/$/, '')}/rest/v1/${path}`, {
+      ...options,
+      headers: { apikey: ONLINE.key, 'Content-Type': 'application/json', ...options.headers },
+      signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.status === 204 ? null : res.json();
+  }
+
+  async function fetchOnline() {
+    if (!online.enabled) return;
+    online.loading = true;
+    renderRecordsIfOpen();
+    try {
+      const rows = await api(`scores?select=id,name,score&order=score.desc,created_at.asc&limit=${TOP_N}`);
+      online.list = Array.isArray(rows) ? rows : [];
+      online.error = false;
+    } catch {
+      online.error = true;
+    }
+    online.loading = false;
+    renderLeader();
+    renderRecordsIfOpen();
+  }
+
+  async function submitOnline(name, points) {
+    try {
+      const rows = await api('scores', {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ name, score: points }),
+      });
+      online.mineId = rows?.[0]?.id ?? null;
+    } catch {
+      online.error = true;
+    }
+    await fetchOnline();
+  }
+
+  function renderLeader() {
+    const top = online.list?.[0];
+    const show = Boolean(top) && (panel === 'menu' || (panel === 'over' && pendingScore === null));
+    leaderEl.textContent = top ? `👑 Líder mundial: ${top.name} · ${top.score}` : '';
+    leaderEl.classList.toggle('hidden', !show);
+  }
+
+  function renderRecordsIfOpen() {
+    if (panel === 'records' && !overlay.classList.contains('hidden')) renderRecords();
+  }
+
   function renderRecords() {
-    const list = loadRecords();
+    const isOnline = recTab === 'online';
+    for (const b of recTabs.querySelectorAll('.tab')) b.classList.toggle('active', b.dataset.tab === recTab);
+    recTabs.classList.toggle('hidden', !online.enabled);
+
+    let list, mine, status = '';
+    if (isOnline) {
+      list = online.list || [];
+      mine = r => r.id === online.mineId;
+      if (online.loading && !online.list) status = 'Cargando…';
+      else if (online.error) status = online.list ? 'Sin conexión: puede no estar al día' : 'No se pudo conectar. Revisa tu internet.';
+    } else {
+      list = loadRecords();
+      mine = (r, i) => i === highlight;
+      status = online.enabled ? '' : 'En este dispositivo';
+    }
+    recStatusEl.textContent = status;
+
     const body = recordsEl.tBodies[0];
     body.replaceChildren();
     if (!list.length) {
+      if (isOnline && (online.loading || online.error)) return;
       const tr = body.insertRow();
       tr.className = 'empty';
       const td = tr.insertCell();
@@ -343,11 +576,12 @@
     list.forEach((r, i) => {
       const tr = body.insertRow();
       if (i === 0) tr.classList.add('top1');
-      if (i === highlight) tr.classList.add('mine');
+      if (mine(r, i)) tr.classList.add('mine');
       tr.insertCell().textContent = i === 0 ? '👑' : `${i + 1}.`;
       tr.insertCell().textContent = r.name;
       tr.insertCell().textContent = r.score;
     });
+    recordsEl.querySelector('tr.mine')?.scrollIntoView({ block: 'nearest' });
   }
 
   // ---------- Selector de skins ----------
@@ -415,6 +649,8 @@
     tickMs = START_TICK;
     particles = [];
     popups = [];
+    flames = [];
+    sound.setLevel(1);
     placeFood();
     updateHud();
   }
@@ -429,6 +665,8 @@
       const size = canvas.clientWidth;
       popups.push({ x: size / 2, y: size * .3, text: `¡NIVEL ${level}!`, color: '#00e5ff', life: 1.4, big: true });
       sound.play('level');
+      sound.setLevel(level);
+      levelUpBurst();
     }
   }
 
@@ -575,6 +813,108 @@
     }
   }
 
+  // ---------- Fuego: sale de la serpiente desde el nivel 2 y crece con cada nivel ----------
+  // Nivel 2: llamitas en la cabeza · 3: cabeza y cuello · 4: medio cuerpo y aura ·
+  // 5+: todo el cuerpo con chispas · 7+: chispas de colores
+  function flameColorOf(i, k, t) {
+    const sk = SKINS[skin];
+    return sk.flame ? sk.flame(i) : sk.color(i, k, t);
+  }
+
+  function emitFlames(dt, t) {
+    const power = Math.min(level - 1, 7);
+    if (power < 1 || flames.length > MAX_FLAMES) return;
+    flameAcc += dt / 1000 * (25 + power * 35); // partículas por segundo
+    const n = snake.length, sc = cell / 20;
+    const reach = power === 1 ? 1 : power === 2 ? Math.min(n, 3) : power === 3 ? Math.ceil(n / 2) : n;
+    while (flameAcc >= 1) {
+      flameAcc--;
+      const i = Math.random() < .45 ? 0 : Math.floor(Math.random() * reach);
+      const seg = snake[i];
+      const cx = (seg.x + .5) * cell + (Math.random() - .5) * cell * .5;
+      const cy = (seg.y + .5) * cell + (Math.random() - .5) * cell * .5;
+      const back = i === 0 ? 1 + Math.random() * 1.5 : .3; // la cabeza deja estela hacia atrás
+      flames.push({
+        x: cx, y: cy,
+        vx: (-dir.x * back + (Math.random() - .5) * .8) * sc,
+        vy: (-dir.y * back - (.6 + Math.random() * (.8 + power * .15))) * sc,
+        life: 1,
+        decay: .025 + Math.random() * .03,
+        size: cell * (.16 + power * .035) * (i === 0 ? 1.25 : 1) * (.7 + Math.random() * .6),
+        color: flameColorOf(i, i / Math.max(1, n - 1), t),
+      });
+      if (power >= 4 && Math.random() < .12 + power * .02) {
+        const a = Math.random() * Math.PI * 2, sp = (2 + Math.random() * 3) * sc;
+        flames.push({
+          x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5 * sc,
+          life: 1, decay: .02 + Math.random() * .02, size: cell * .07, spark: true,
+          color: power >= 6 ? `hsl(${Math.random() * 360}, 100%, 70%)` : '#fff6d0',
+        });
+      }
+    }
+  }
+
+  // Explosión de chispas del color de la serpiente al subir de nivel (más grande en cada nivel)
+  function levelUpBurst() {
+    const t = performance.now(), n = snake.length, sc = cell / 20;
+    const count = Math.min(260, 40 + level * 18);
+    for (let c = 0; c < count; c++) {
+      const i = Math.floor(Math.random() * n), seg = snake[i];
+      const a = Math.random() * Math.PI * 2, sp = (2 + Math.random() * 4) * sc * (1 + level * .1);
+      flames.push({
+        x: (seg.x + .5) * cell, y: (seg.y + .5) * cell,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 1, decay: .012 + Math.random() * .015, size: cell * (.1 + Math.random() * .12),
+        color: flameColorOf(i, i / Math.max(1, n - 1), t), spark: true,
+      });
+    }
+  }
+
+  function updateFlames() {
+    const sc = cell / 20;
+    flames = flames.filter(f => {
+      f.x += f.vx; f.y += f.vy;
+      if (f.spark) f.vy += .06 * sc;           // las chispas caen
+      else { f.vy -= .04 * sc; f.vx *= .96; }  // las llamas suben
+      f.life -= f.decay;
+      return f.life > 0;
+    });
+  }
+
+  function drawFlames(t) {
+    const power = Math.min(level - 1, 7);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.shadowBlur = 0;
+    // Aura alrededor de la cabeza desde el nivel 4
+    if (power >= 3 && (state === 'playing' || state === 'hurt' || state === 'paused')) {
+      const h = snake[0], cx = (h.x + .5) * cell, cy = (h.y + .5) * cell;
+      const r = cell * (1.2 + power * .25 + Math.sin(t / 120) * .15);
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, flameColorOf(0, 0, t));
+      g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.globalAlpha = Math.min(.6, .2 + power * .05);
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    for (const f of flames) {
+      const r = f.spark ? f.size : f.size * (.4 + .6 * f.life);
+      ctx.globalAlpha = f.life * (f.spark ? 1 : .55);
+      ctx.fillStyle = f.color;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      if (!f.spark && f.life > .55) { // núcleo blanco caliente
+        ctx.globalAlpha = (f.life - .55) * 1.2;
+        ctx.fillStyle = '#fffbe6';
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, r * .4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
   function start() {
     nameInput.blur();
     reset();
@@ -603,7 +943,9 @@
     newBest = score > best;
     if (newBest) { best = score; store.set('serpiente-neon-best', best); }
     updateHud();
-    pendingScore = qualifies(score) ? score : null;
+    pendingLocal = qualifiesLocal(score);
+    pendingOnline = qualifiesOnline(score);
+    pendingScore = pendingLocal || pendingOnline ? score : null;
     sound.play(pendingScore !== null ? 'record' : 'over');
     showPanel('over', won);
   }
@@ -613,14 +955,17 @@
     if (pendingScore === null) return;
     const name = nameInput.value.trim().replace(/\s+/g, ' ').slice(0, 12) || 'Anónimo';
     store.set('serpiente-neon-name', name);
-    highlight = addRecord(name, pendingScore);
+    highlight = pendingLocal ? addRecord(name, pendingScore) : -1;
+    online.mineId = null;
+    if (pendingOnline) submitOnline(name, pendingScore);
+    recTab = pendingOnline ? 'online' : 'local';
     pendingScore = null;
     nameInput.blur();
-    showPanel('records');
+    showPanel('records', false, true);
   }
 
   // ---------- Overlay ----------
-  function showPanel(name, won = false) {
+  function showPanel(name, won = false, keepTab = false) {
     panel = name;
     overlay.className = `overlay panel-${name}`;
     const isMenu = name === 'menu';
@@ -629,7 +974,12 @@
 
     if (name === 'menu') { titleEl.textContent = '¿Listo?'; msgEl.textContent = ''; }
     if (name === 'pause') { titleEl.textContent = 'Pausa'; msgEl.textContent = 'Toca SEGUIR o pulsa Espacio'; }
-    if (name === 'records') { titleEl.textContent = '🏆 Récords'; msgEl.textContent = 'En este dispositivo'; }
+    if (name === 'records') {
+      titleEl.textContent = '🏆 Récords';
+      msgEl.textContent = '';
+      if (!keepTab) recTab = online.enabled ? 'online' : 'local';
+      if (online.enabled && !keepTab) fetchOnline();
+    }
     if (isOver) {
       titleEl.textContent = won ? '¡Llenaste el tablero!' : 'Fin del juego';
       msgEl.textContent = `Puntos: ${score}${newBest ? ' · ¡Nuevo récord! 🎉' : ''}`;
@@ -637,6 +987,13 @@
     msgEl.style.display = msgEl.textContent ? '' : 'none';
 
     nameForm.classList.toggle('hidden', !asking);
+    if (asking) {
+      nameForm.querySelector('label').textContent = pendingOnline
+        ? '¡Entraste al top 10 de todos! Escribe tu nombre'
+        : '¡Entraste a tu top 10! Escribe tu nombre';
+    }
+    recTabs.classList.toggle('hidden', name !== 'records' || !online.enabled);
+    if (name !== 'records') recStatusEl.textContent = '';
     recordsEl.classList.toggle('hidden', name !== 'records');
     for (const el of [skinsEl, skinsLabel]) el.classList.toggle('hidden', !(isMenu || (isOver && !asking)));
     legendEl.classList.toggle('hidden', !isMenu);
@@ -646,11 +1003,10 @@
     startBtn.textContent = name === 'pause' ? 'SEGUIR' : state === 'over' ? 'OTRA VEZ' : 'JUGAR';
     recordsBtn.textContent = name === 'records' ? 'VOLVER' : '🏆 RÉCORDS';
 
-    if (name === 'records') renderRecords();
     overlay.classList.remove('hidden');
     overlay.scrollTop = 0;
-    // Si tu récord quedó abajo en la tabla, se desplaza hasta verlo
-    recordsEl.querySelector('tr.mine')?.scrollIntoView({ block: 'nearest' });
+    if (name === 'records') renderRecords();
+    renderLeader();
 
     if (asking) {
       nameInput.value = store.get('serpiente-neon-name') || '';
@@ -756,6 +1112,8 @@
     }
     ctx.globalAlpha = 1;
 
+    drawFlames(t);
+
     // Partículas
     for (const p of particles) {
       ctx.globalAlpha = Math.max(0, p.life);
@@ -790,7 +1148,12 @@
     }
   }
 
+  let lastFrame = 0;
   function loop(now) {
+    const frameDt = Math.min(now - lastFrame, 100);
+    lastFrame = now;
+    if (state === 'playing' || state === 'hurt') emitFlames(frameDt, now);
+    updateFlames();
     if (state === 'playing') {
       const dt = Math.min(now - last, 250); // evita saltos al volver de otra pestaña
       acc += dt;
@@ -818,9 +1181,11 @@
     ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
   };
   window.addEventListener('keydown', e => {
-    if (e.target === nameInput) return; // escribiendo el nombre: las teclas son letras
+    if (e.code === 'Escape' && !volPanel.classList.contains('hidden')) { closeVolume(); return; }
+    // Escribiendo el nombre o moviendo un control de volumen: las teclas son para ese campo
+    if (e.target instanceof HTMLInputElement) return;
     if (KEYMAP[e.code]) { e.preventDefault(); turn(KEYMAP[e.code]); return; }
-    if (e.code === 'KeyM') { soundBtn.click(); return; }
+    if (e.code === 'KeyM') { $('muteBtn').click(); return; }
     const skinsVisible = !skinsEl.classList.contains('hidden') && !overlay.classList.contains('hidden');
     if (skinsVisible && /^Digit[1-6]$/.test(e.code)) { selectSkin(Number(e.code.slice(5)) - 1); return; }
     if (e.code === 'Space' || e.code === 'KeyP') {
@@ -860,9 +1225,14 @@
     window.addEventListener(ev, sound.unlock, { passive: true });
   }
 
-  // Si cambias de app o bloqueas el teléfono, el juego se pausa solo
+  // Si cambias de app o bloqueas el teléfono, el juego se pausa y la música se detiene
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && state === 'playing') togglePause();
+    if (document.hidden) {
+      if (state === 'playing') togglePause();
+      sound.suspend();
+    } else {
+      sound.unlock();
+    }
   });
 
   startBtn.addEventListener('click', () => {
@@ -874,11 +1244,33 @@
   });
   nameForm.addEventListener('submit', saveName);
   $('skipBtn').addEventListener('click', () => { pendingScore = null; showPanel('over'); });
+  // Panel de volumen (al abrirlo durante la partida, el juego se pausa)
+  function closeVolume() {
+    volPanel.classList.add('hidden');
+    soundBtn.focus();
+  }
   soundBtn.addEventListener('click', () => {
     sound.unlock();
+    if (!volPanel.classList.contains('hidden')) return closeVolume();
+    if (state === 'playing') togglePause();
+    renderSoundUI();
+    volPanel.classList.remove('hidden');
+  });
+  $('volClose').addEventListener('click', closeVolume);
+  $('muteBtn').addEventListener('click', () => {
+    sound.unlock();
     sound.toggle();
-    renderSoundBtn();
-    soundBtn.blur();
+    renderSoundUI();
+  });
+  $('musicVol').addEventListener('input', e => { sound.setMusicVol(Number(e.target.value)); renderSoundUI(); });
+  $('sfxVol').addEventListener('input', e => { sound.setSfxVol(Number(e.target.value)); renderSoundUI(); });
+  $('sfxVol').addEventListener('change', () => sound.play('eat')); // muestra de cómo suena
+  recTabs.addEventListener('click', e => {
+    const tab = e.target.closest('.tab')?.dataset.tab;
+    if (!tab) return;
+    recTab = tab;
+    renderRecords();
+    if (tab === 'online') fetchOnline();
   });
   pauseBtn.addEventListener('click', () => { togglePause(); pauseBtn.blur(); });
 
@@ -887,13 +1279,14 @@
   best = Math.max(Number(store.get('serpiente-neon-best')) || 0, topScore);
   const savedSkin = Number(store.get('serpiente-neon-skin'));
   selectSkin(Number.isInteger(savedSkin) && savedSkin >= 0 && savedSkin < SKINS.length ? savedSkin : 0);
-  renderSoundBtn();
+  renderSoundUI();
   state = 'ready';
   reset();
   showPanel('menu');
   window.addEventListener('resize', resize);
   resize();
-  requestAnimationFrame(t => { last = t; loop(t); });
+  requestAnimationFrame(t => { last = lastFrame = t; loop(t); });
+  fetchOnline(); // carga el líder mundial para el menú
 })();
 </script>
 </body>
